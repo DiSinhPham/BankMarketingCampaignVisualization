@@ -1,10 +1,11 @@
 module Main exposing (..)
 
 import Browser
-import Html exposing (Html, div, pre, text)
-import Http
 import Csv
 import Csv.Decode
+import Html exposing (Html, button, div, pre, text)
+import Http
+
 
 
 -- MAIN
@@ -53,34 +54,8 @@ init _ =
     )
 
 
-convertResponseString : Http.Response String -> Result ErrorDetailed ( Http.Metadata, String )
-convertResponseString httpResponse =
-    case httpResponse of
-        Http.BadUrl_ url ->
-            Err (BadUrl url)
-
-        Http.Timeout_ ->
-            Err Timeout
-
-        Http.NetworkError_ ->
-            Err NetworkError
-
-        Http.BadStatus_ metadata body ->
-            Err (BadStatus metadata body)
-
-        Http.GoodStatus_ metadata body ->
-            Ok ( metadata, body )
-
-
-expectStringDetailed : (Result ErrorDetailed ( Http.Metadata, String ) -> msg) -> Http.Expect msg
-expectStringDetailed msg =
-    Http.expectStringResponse msg convertResponseString
 
 -- UPDATE
-
-
-type Msg
-    = GotText (Result ErrorDetailed ( Http.Metadata, String ))
 
 
 update : Msg -> ( Model, LoadedCSV ) -> ( ( Model, LoadedCSV ), Cmd Msg )
@@ -128,10 +103,11 @@ view ( model, loadedFile ) =
     let
         csvStringToHtml : LoadedCSV -> List (Html Msg)
         csvStringToHtml csv =
-             Html.p [] [ text csv.url ] :: [pre [] [ text (csv.contents) ]]
+            Html.p [] [ text csv.url ] :: [ pre [] [ text csv.contents ] ]
 
-        htmlList = csvStringToHtml loadedFile
-        
+        htmlList =
+            csvStringToHtml loadedFile
+
         ------------ Decode CSV
         --Decode Person
         csvStringToPerson : String -> List Person
@@ -142,17 +118,21 @@ view ( model, loadedFile ) =
                 |> Maybe.withDefault []
 
         decodePerson : Csv.Decode.Decoder (Person -> a) a
-        decodePerson = Csv.Decode.map Person 
-                        (Csv.Decode.field "age" (String.toInt >> Result.fromMaybe "error parsing string")
-                            |> Csv.Decode.andMap (Csv.Decode.field "job" (stringToJob >> Result.fromMaybe "error parsing string"))
-                            |> Csv.Decode.andMap (Csv.Decode.field "marital" (stringToMarital >> Result.fromMaybe "error parsing string"))
-                            |> Csv.Decode.andMap (Csv.Decode.field "education" (stringToEducation >> Result.fromMaybe "error parsing string"))
-                            |> Csv.Decode.andMap (Csv.Decode.field "default" (stringYesNoToBool >> Result.fromMaybe "error parsing string"))
-                            |> Csv.Decode.andMap (Csv.Decode.field "balance" (String.toInt >> Result.fromMaybe "error parsing string"))
-                            |> Csv.Decode.andMap (Csv.Decode.field "housing" (stringYesNoToBool >> Result.fromMaybe "error parsing string"))
-                            |> Csv.Decode.andMap (Csv.Decode.field "loan" (stringYesNoToBool >> Result.fromMaybe "error parsing string"))
-                        )
-        personList = csvStringToPerson loadedFile.contents
+        decodePerson =
+            Csv.Decode.map Person
+                (Csv.Decode.field "age" (String.toInt >> Result.fromMaybe "error parsing string")
+                    |> Csv.Decode.andMap (Csv.Decode.field "job" (stringToJob >> Result.fromMaybe "error parsing string"))
+                    |> Csv.Decode.andMap (Csv.Decode.field "marital" (stringToMarital >> Result.fromMaybe "error parsing string"))
+                    |> Csv.Decode.andMap (Csv.Decode.field "education" (stringToEducation >> Result.fromMaybe "error parsing string"))
+                    |> Csv.Decode.andMap (Csv.Decode.field "default" (stringYesNoToBool >> Result.fromMaybe "error parsing string"))
+                    |> Csv.Decode.andMap (Csv.Decode.field "balance" (String.toInt >> Result.fromMaybe "error parsing string"))
+                    |> Csv.Decode.andMap (Csv.Decode.field "housing" (stringYesNoToBool >> Result.fromMaybe "error parsing string"))
+                    |> Csv.Decode.andMap (Csv.Decode.field "loan" (stringYesNoToBool >> Result.fromMaybe "error parsing string"))
+                )
+
+        personList =
+            csvStringToPerson loadedFile.contents
+
         --Decode Campaign Info
         csvStringToCampaignInfo : String -> List CampaignInfo
         csvStringToCampaignInfo csvRaw =
@@ -162,18 +142,21 @@ view ( model, loadedFile ) =
                 |> Maybe.withDefault []
 
         decodeCampaignInfo : Csv.Decode.Decoder (CampaignInfo -> a) a
-        decodeCampaignInfo = Csv.Decode.map CampaignInfo 
-                        (Csv.Decode.field "contact" (stringToContact >> Result.fromMaybe "error parsing string")
-                            |> Csv.Decode.andMap (Csv.Decode.field "day" (String.toInt >> Result.fromMaybe "error parsing string"))
-                            |> Csv.Decode.andMap (Csv.Decode.field "month" (stringMonthToInt >> Result.fromMaybe "error parsing string"))
-                            |> Csv.Decode.andMap (Csv.Decode.field "duration" (String.toInt >> Result.fromMaybe "error parsing string"))
-                            |> Csv.Decode.andMap (Csv.Decode.field "campaign" (String.toInt >> Result.fromMaybe "error parsing string"))
-                            |> Csv.Decode.andMap (Csv.Decode.field "pdays" (String.toInt >> Result.fromMaybe "error parsing string"))
-                            |> Csv.Decode.andMap (Csv.Decode.field "previous" (String.toInt >> Result.fromMaybe "error parsing string"))
-                            |> Csv.Decode.andMap (Csv.Decode.field "poutcome" (stringToOutcome >> Result.fromMaybe "error parsing string"))
-                            |> Csv.Decode.andMap (Csv.Decode.field "y" (stringToOutcome >> Result.fromMaybe "error parsing string"))
-                        )
-        campaignInfoList = Debug.log "test" (csvStringToCampaignInfo loadedFile.contents)
+        decodeCampaignInfo =
+            Csv.Decode.map CampaignInfo
+                (Csv.Decode.field "contact" (stringToContact >> Result.fromMaybe "error parsing string")
+                    |> Csv.Decode.andMap (Csv.Decode.field "day" (String.toInt >> Result.fromMaybe "error parsing string"))
+                    |> Csv.Decode.andMap (Csv.Decode.field "month" (stringMonthToInt >> Result.fromMaybe "error parsing string"))
+                    |> Csv.Decode.andMap (Csv.Decode.field "duration" (String.toInt >> Result.fromMaybe "error parsing string"))
+                    |> Csv.Decode.andMap (Csv.Decode.field "campaign" (String.toInt >> Result.fromMaybe "error parsing string"))
+                    |> Csv.Decode.andMap (Csv.Decode.field "pdays" (String.toInt >> Result.fromMaybe "error parsing string"))
+                    |> Csv.Decode.andMap (Csv.Decode.field "previous" (String.toInt >> Result.fromMaybe "error parsing string"))
+                    |> Csv.Decode.andMap (Csv.Decode.field "poutcome" (stringToOutcome >> Result.fromMaybe "error parsing string"))
+                    |> Csv.Decode.andMap (Csv.Decode.field "y" (stringToOutcome >> Result.fromMaybe "error parsing string"))
+                )
+
+        campaignInfoList =
+            csvStringToCampaignInfo loadedFile.contents
     in
     case model of
         Failure error ->
@@ -184,7 +167,51 @@ view ( model, loadedFile ) =
 
         Success ( metadata, body ) ->
             div []
-                (htmlList)
+                ([ Html.p [] [ Html.text "Bank Marketing Campaign Analysis" ]
+                 , button [] [ text "Demographics Analysis" ]
+                 , button [] [ text "Campaign Timeline" ]
+                 , button [] [ text "Brand Familiarity" ]
+                 ]
+                    ++ htmlList
+                )
+
+
+
+-- HTTP Responses
+
+
+convertResponseString : Http.Response String -> Result ErrorDetailed ( Http.Metadata, String )
+convertResponseString httpResponse =
+    case httpResponse of
+        Http.BadUrl_ url ->
+            Err (BadUrl url)
+
+        Http.Timeout_ ->
+            Err Timeout
+
+        Http.NetworkError_ ->
+            Err NetworkError
+
+        Http.BadStatus_ metadata body ->
+            Err (BadStatus metadata body)
+
+        Http.GoodStatus_ metadata body ->
+            Ok ( metadata, body )
+
+
+expectStringDetailed : (Result ErrorDetailed ( Http.Metadata, String ) -> msg) -> Http.Expect msg
+expectStringDetailed msg =
+    Http.expectStringResponse msg convertResponseString
+
+
+type Msg
+    = GotText (Result ErrorDetailed ( Http.Metadata, String ))
+
+
+
+-- DATA STRUCTURE
+
+
 type alias Person =
     { age : Int
     , job : Job
@@ -195,6 +222,7 @@ type alias Person =
     , housing : Bool
     , loan : Bool
     }
+
 
 type alias CampaignInfo =
     { contactType : Contact
@@ -208,13 +236,15 @@ type alias CampaignInfo =
     , output : Outcome
     }
 
+
 type alias CampaignFull =
-    {person : Person
+    { person : Person
     , campaignInfo : CampaignInfo
     }
 
-type Job 
-    = Admin 
+
+type Job
+    = Admin
     | Unemployed
     | Management
     | Housemaid
@@ -227,147 +257,211 @@ type Job
     | Services
     | UnknownJob
 
-stringToJob : String -> Maybe Job
-stringToJob jobname =
-    case jobname of 
-        "admin." ->
-            Just Admin
-        "unemployed" ->
-            Just Unemployed
-        "management" ->
-            Just Management
-        "housemaid" ->
-            Just Housemaid
-        "entrepreneur" ->
-            Just Entrepreneur
-        "student" ->
-            Just Student
-        "blue-collar" ->
-            Just BlueCollar
-        "self-employed" ->
-            Just SelfEmployed
-        "retired" ->
-            Just Retired
-        "technician" ->
-            Just Technician
-        "services" ->
-            Just Services
-        "unknown" ->
-            Just UnknownJob
-        _ ->
-            Nothing
-            
 
 type Marital
     = Married
     | Divorced
     | Single
 
-stringToMarital : String -> Maybe Marital
-stringToMarital marital =
-    case marital of 
-        "married" ->
-            Just Married
-        "divorced" ->
-            Just Divorced
-        "single" ->
-            Just Single
-        _ ->
-            Nothing
 
-type Education 
-    =  Primary
+type Education
+    = Primary
     | Secondary
     | Tertiary
     | UnknownEd
-stringToEducation : String -> Maybe Education
-stringToEducation education =
-    case education of 
-        "primary" ->
-            Just Primary
-        "secondary" ->
-            Just Secondary
-        "tertiary" ->
-            Just Tertiary
-        "unknown" ->
-            Just UnknownEd
-        _ ->
-            Nothing
+
+
 type Contact
     = Telephone
     | Cellular
     | UnknownContact
 
-stringToContact : String -> Maybe Contact
-stringToContact contact =
-    case contact of 
-        "telephone" ->
-            Just Telephone
-        "cellular" ->
-            Just Cellular
-        "unknown" ->
-            Just UnknownContact
-        _ ->
-            Nothing
+
 type Outcome
     = Accepted
     | Declined
     | Other
     | UnknownOutcome
-stringToOutcome : String -> Maybe Outcome
-stringToOutcome outcome =
-    case outcome of 
-        "yes" ->
-            Just Accepted
-        "success" ->
-            Just Accepted
-        "no" ->
-            Just Declined
-        "failure" -> 
-            Just Declined
-        "other" ->
-            Just Other
+
+
+
+-- DECODER FUNCTIONS
+
+
+stringToJob : String -> Maybe Job
+stringToJob jobname =
+    case jobname of
+        "admin." ->
+            Just Admin
+
+        "unemployed" ->
+            Just Unemployed
+
+        "management" ->
+            Just Management
+
+        "housemaid" ->
+            Just Housemaid
+
+        "entrepreneur" ->
+            Just Entrepreneur
+
+        "student" ->
+            Just Student
+
+        "blue-collar" ->
+            Just BlueCollar
+
+        "self-employed" ->
+            Just SelfEmployed
+
+        "retired" ->
+            Just Retired
+
+        "technician" ->
+            Just Technician
+
+        "services" ->
+            Just Services
+
         "unknown" ->
-            Just UnknownOutcome
+            Just UnknownJob
+
         _ ->
             Nothing
+
+
+stringToMarital : String -> Maybe Marital
+stringToMarital marital =
+    case marital of
+        "married" ->
+            Just Married
+
+        "divorced" ->
+            Just Divorced
+
+        "single" ->
+            Just Single
+
+        _ ->
+            Nothing
+
+
+stringToOutcome : String -> Maybe Outcome
+stringToOutcome outcome =
+    case outcome of
+        "yes" ->
+            Just Accepted
+
+        "success" ->
+            Just Accepted
+
+        "no" ->
+            Just Declined
+
+        "failure" ->
+            Just Declined
+
+        "other" ->
+            Just Other
+
+        "unknown" ->
+            Just UnknownOutcome
+
+        _ ->
+            Nothing
+
+
+stringToEducation : String -> Maybe Education
+stringToEducation education =
+    case education of
+        "primary" ->
+            Just Primary
+
+        "secondary" ->
+            Just Secondary
+
+        "tertiary" ->
+            Just Tertiary
+
+        "unknown" ->
+            Just UnknownEd
+
+        _ ->
+            Nothing
+
+
+stringToContact : String -> Maybe Contact
+stringToContact contact =
+    case contact of
+        "telephone" ->
+            Just Telephone
+
+        "cellular" ->
+            Just Cellular
+
+        "unknown" ->
+            Just UnknownContact
+
+        _ ->
+            Nothing
+
+
 stringYesNoToBool : String -> Maybe Bool
 stringYesNoToBool string =
     case string of
-       "yes" ->
+        "yes" ->
             Just True
-       "no" ->
+
+        "no" ->
             Just False
-       _ ->
+
+        _ ->
             Nothing
+
 
 stringMonthToInt : String -> Maybe Int
 stringMonthToInt month =
-    case month of 
+    case month of
         "jan" ->
             Just 1
+
         "feb" ->
             Just 2
+
         "mar" ->
             Just 3
+
         "apr" ->
             Just 4
+
         "may" ->
             Just 5
+
         "jun" ->
             Just 6
+
         "jul" ->
             Just 7
+
         "aug" ->
             Just 8
+
         "sep" ->
             Just 9
+
         "oct" ->
             Just 10
+
         "nov" ->
             Just 11
+
         "dec" ->
             Just 12
+
         _ ->
             Nothing
-            
+
+
+
+-- CONVERSION FUNCTIONS
