@@ -3,7 +3,8 @@ module Main exposing (..)
 import Browser
 import Html exposing (Html, div, pre, text)
 import Http
-
+import Csv
+import Csv.Decode
 
 
 -- MAIN
@@ -36,15 +37,15 @@ type ErrorDetailed
     | BadBody String
 
 
-type alias LoadedCVS =
+type alias LoadedCSV =
     { url : String
     , contents : String
     }
 
 
-init : () -> ( ( Model, LoadedCVS ), Cmd Msg )
+init : () -> ( ( Model, LoadedCSV ), Cmd Msg )
 init _ =
-    ( ( Loading, LoadedCVS "default" "default" )
+    ( ( Loading, LoadedCSV "default" "default" )
     , Http.get
         { url = "https://raw.githubusercontent.com/DiSinhPham/BankMarketingCampaignVisualization/main/data/bank-full.csv"
         , expect = expectStringDetailed GotText
@@ -82,7 +83,7 @@ type Msg
     = GotText (Result ErrorDetailed ( Http.Metadata, String ))
 
 
-update : Msg -> ( Model, LoadedCVS ) -> ( ( Model, LoadedCVS ), Cmd Msg )
+update : Msg -> ( Model, LoadedCSV ) -> ( ( Model, LoadedCSV ), Cmd Msg )
 update msg ( model, loadedFile ) =
     let
         newModel =
@@ -104,7 +105,7 @@ update msg ( model, loadedFile ) =
                     loadedFile
 
                 Success ( metadata, body ) ->
-                    LoadedCVS metadata.url body
+                    LoadedCSV metadata.url body
     in
     ( ( newModel, updatedFile ), Cmd.none )
 
@@ -113,7 +114,7 @@ update msg ( model, loadedFile ) =
 -- SUBSCRIPTIONS
 
 
-subscriptions : ( Model, LoadedCVS ) -> Sub Msg
+subscriptions : ( Model, LoadedCSV ) -> Sub Msg
 subscriptions ( model, loadedFile ) =
     Sub.none
 
@@ -122,14 +123,57 @@ subscriptions ( model, loadedFile ) =
 -- VIEW
 
 
-view : ( Model, LoadedCVS ) -> Html Msg
+view : ( Model, LoadedCSV ) -> Html Msg
 view ( model, loadedFile ) =
     let
-        cvsStringToHtml : LoadedCVS -> List (Html Msg)
-        cvsStringToHtml cvs =
-             Html.p [] [ text cvs.url ] :: [pre [] [ text (cvs.contents) ]]
+        csvStringToHtml : LoadedCSV -> List (Html Msg)
+        csvStringToHtml csv =
+             Html.p [] [ text csv.url ] :: [pre [] [ text (csv.contents) ]]
+
+        htmlList = csvStringToHtml loadedFile
         
-        htmlList = cvsStringToHtml loadedFile
+        ------------ Decode CSV
+        --Decode Person
+        csvStringToPerson : String -> List Person
+        csvStringToPerson csvRaw =
+            Csv.parseWith ";" loadedFile.contents
+                |> Csv.Decode.decodeCsv decodePerson
+                |> Result.toMaybe
+                |> Maybe.withDefault []
+
+        decodePerson : Csv.Decode.Decoder (Person -> a) a
+        decodePerson = Csv.Decode.map Person 
+                        (Csv.Decode.field "age" (String.toInt >> Result.fromMaybe "error parsing string")
+                            |> Csv.Decode.andMap (Csv.Decode.field "job" (stringToJob >> Result.fromMaybe "error parsing string"))
+                            |> Csv.Decode.andMap (Csv.Decode.field "marital" (stringToMarital >> Result.fromMaybe "error parsing string"))
+                            |> Csv.Decode.andMap (Csv.Decode.field "education" (stringToEducation >> Result.fromMaybe "error parsing string"))
+                            |> Csv.Decode.andMap (Csv.Decode.field "default" (stringYesNoToBool >> Result.fromMaybe "error parsing string"))
+                            |> Csv.Decode.andMap (Csv.Decode.field "balance" (String.toInt >> Result.fromMaybe "error parsing string"))
+                            |> Csv.Decode.andMap (Csv.Decode.field "housing" (stringYesNoToBool >> Result.fromMaybe "error parsing string"))
+                            |> Csv.Decode.andMap (Csv.Decode.field "loan" (stringYesNoToBool >> Result.fromMaybe "error parsing string"))
+                        )
+        personList = csvStringToPerson loadedFile.contents
+        --Decode Campaign Info
+        csvStringToCampaignInfo : String -> List CampaignInfo
+        csvStringToCampaignInfo csvRaw =
+            Csv.parseWith ";" loadedFile.contents
+                |> Csv.Decode.decodeCsv decodeCampaignInfo
+                |> Result.toMaybe
+                |> Maybe.withDefault []
+
+        decodeCampaignInfo : Csv.Decode.Decoder (CampaignInfo -> a) a
+        decodeCampaignInfo = Csv.Decode.map CampaignInfo 
+                        (Csv.Decode.field "contact" (stringToContact >> Result.fromMaybe "error parsing string")
+                            |> Csv.Decode.andMap (Csv.Decode.field "day" (String.toInt >> Result.fromMaybe "error parsing string"))
+                            |> Csv.Decode.andMap (Csv.Decode.field "month" (stringMonthToInt >> Result.fromMaybe "error parsing string"))
+                            |> Csv.Decode.andMap (Csv.Decode.field "duration" (String.toInt >> Result.fromMaybe "error parsing string"))
+                            |> Csv.Decode.andMap (Csv.Decode.field "campaign" (String.toInt >> Result.fromMaybe "error parsing string"))
+                            |> Csv.Decode.andMap (Csv.Decode.field "pdays" (String.toInt >> Result.fromMaybe "error parsing string"))
+                            |> Csv.Decode.andMap (Csv.Decode.field "previous" (String.toInt >> Result.fromMaybe "error parsing string"))
+                            |> Csv.Decode.andMap (Csv.Decode.field "poutcome" (stringToOutcome >> Result.fromMaybe "error parsing string"))
+                            |> Csv.Decode.andMap (Csv.Decode.field "y" (stringToOutcome >> Result.fromMaybe "error parsing string"))
+                        )
+        campaignInfoList = Debug.log "test" (csvStringToCampaignInfo loadedFile.contents)
     in
     case model of
         Failure error ->
@@ -141,7 +185,6 @@ view ( model, loadedFile ) =
         Success ( metadata, body ) ->
             div []
                 (htmlList)
-                
 type alias Person =
     { age : Int
     , job : Job
@@ -154,21 +197,24 @@ type alias Person =
     }
 
 type alias CampaignInfo =
-    { person : Person
-    , contactType : Contact
+    { contactType : Contact
     , day : Int
     , month : Int
     , duration : Int
     , contactCount : Int
-    , outcome : Bool
     , pdays : Int
     , pcontactCount : Int
-    , poutcome : Bool
+    , poutcome : Outcome
+    , output : Outcome
     }
-    
+
+type alias CampaignFull =
+    {person : Person
+    , campaignInfo : CampaignInfo
+    }
+
 type Job 
     = Admin 
-    | UnknownJob
     | Unemployed
     | Management
     | Housemaid
@@ -179,19 +225,149 @@ type Job
     | Retired
     | Technician
     | Services
+    | UnknownJob
+
+stringToJob : String -> Maybe Job
+stringToJob jobname =
+    case jobname of 
+        "admin." ->
+            Just Admin
+        "unemployed" ->
+            Just Unemployed
+        "management" ->
+            Just Management
+        "housemaid" ->
+            Just Housemaid
+        "entrepreneur" ->
+            Just Entrepreneur
+        "student" ->
+            Just Student
+        "blue-collar" ->
+            Just BlueCollar
+        "self-employed" ->
+            Just SelfEmployed
+        "retired" ->
+            Just Retired
+        "technician" ->
+            Just Technician
+        "services" ->
+            Just Services
+        "unknown" ->
+            Just UnknownJob
+        _ ->
+            Nothing
+            
 
 type Marital
     = Married
     | Divorced
     | Single
 
+stringToMarital : String -> Maybe Marital
+stringToMarital marital =
+    case marital of 
+        "married" ->
+            Just Married
+        "divorced" ->
+            Just Divorced
+        "single" ->
+            Just Single
+        _ ->
+            Nothing
+
 type Education 
-    = UnknownEd
-    | Primary
+    =  Primary
     | Secondary
     | Tertiary
-
+    | UnknownEd
+stringToEducation : String -> Maybe Education
+stringToEducation education =
+    case education of 
+        "primary" ->
+            Just Primary
+        "secondary" ->
+            Just Secondary
+        "tertiary" ->
+            Just Tertiary
+        "unknown" ->
+            Just UnknownEd
+        _ ->
+            Nothing
 type Contact
-    = UnknownContact
-    | Telephone
+    = Telephone
     | Cellular
+    | UnknownContact
+
+stringToContact : String -> Maybe Contact
+stringToContact contact =
+    case contact of 
+        "telephone" ->
+            Just Telephone
+        "cellular" ->
+            Just Cellular
+        "unknown" ->
+            Just UnknownContact
+        _ ->
+            Nothing
+type Outcome
+    = Accepted
+    | Declined
+    | Other
+    | UnknownOutcome
+stringToOutcome : String -> Maybe Outcome
+stringToOutcome outcome =
+    case outcome of 
+        "yes" ->
+            Just Accepted
+        "success" ->
+            Just Accepted
+        "no" ->
+            Just Declined
+        "failure" -> 
+            Just Declined
+        "other" ->
+            Just Other
+        "unknown" ->
+            Just UnknownOutcome
+        _ ->
+            Nothing
+stringYesNoToBool : String -> Maybe Bool
+stringYesNoToBool string =
+    case string of
+       "yes" ->
+            Just True
+       "no" ->
+            Just False
+       _ ->
+            Nothing
+
+stringMonthToInt : String -> Maybe Int
+stringMonthToInt month =
+    case month of 
+        "jan" ->
+            Just 1
+        "feb" ->
+            Just 2
+        "mar" ->
+            Just 3
+        "apr" ->
+            Just 4
+        "may" ->
+            Just 5
+        "jun" ->
+            Just 6
+        "jul" ->
+            Just 7
+        "aug" ->
+            Just 8
+        "sep" ->
+            Just 9
+        "oct" ->
+            Just 10
+        "nov" ->
+            Just 11
+        "dec" ->
+            Just 12
+        _ ->
+            Nothing
+            
