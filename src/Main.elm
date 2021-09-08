@@ -5,6 +5,7 @@ import Csv
 import Csv.Decode
 import Html exposing (Html, button, div, pre, text)
 import Http
+import Html.Attributes exposing (disabled)
 
 
 
@@ -171,9 +172,39 @@ view ( model, loadedFile ) =
                  , button [] [ text "Demographics Analysis" ]
                  , button [] [ text "Campaign Timeline" ]
                  , button [] [ text "Brand Familiarity" ]
+                 ,  Html.p [] [ ]
                  ]
-                    ++ htmlList
+                    ++ demographicPersonalView personList
                 )
+
+
+demographicPersonalView : List Person -> List (Html msg)
+demographicPersonalView clientList =
+    let
+        a =
+            3
+    in
+    [ div [] []
+    , button [(disabled True)] [ text "Up" ]
+    , Html.text " 1st: Age"
+    , button [] [ text "Down" ]
+    , div [] []
+    , button [] [ text "Up" ]
+    , Html.text " 2nd: Job"
+    , button [] [ text "Down" ]
+    , div [] []
+    , button [] [ text "Up" ]
+    , Html.text " 3rd: Marital"
+    , button [] [ text "Down" ]
+    , div [] []
+    , button [] [ text "Up" ]
+    , Html.text " 4th: Education"
+    , button [] [ text "Down" ]
+    , div [] []
+    , button [] [ text "Up" ]
+    , Html.text " 5th: Balance"
+    , button [(disabled True)] [ text "Down" ]
+    ]
 
 
 
@@ -465,3 +496,72 @@ stringMonthToInt month =
 
 
 -- CONVERSION FUNCTIONS
+
+
+jobToInt : Job -> Int
+jobToInt job =
+    case job of
+        UnknownJob ->
+            0
+
+        Unemployed ->
+            1
+
+        Retired ->
+            2
+
+        Student ->
+            3
+
+        SelfEmployed ->
+            4
+
+        Housemaid ->
+            5
+
+        BlueCollar ->
+            6
+
+        Technician ->
+            7
+
+        Services ->
+            9
+
+        Management ->
+            10
+
+        Admin ->
+            11
+
+        Entrepreneur ->
+            12
+
+
+maritalToInt : Marital -> Int
+maritalToInt marital =
+    case marital of
+        Single ->
+            0
+
+        Divorced ->
+            1
+
+        Married ->
+            2
+
+
+educationToInt : Education -> Int
+educationToInt education =
+    case education of
+        UnknownEd ->
+            0
+
+        Primary ->
+            1
+
+        Secondary ->
+            2
+
+        Tertiary ->
+            3
