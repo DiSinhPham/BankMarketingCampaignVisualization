@@ -42,10 +42,13 @@ type alias LoadedCVS =
     }
 
 
-init : () -> ( ( Model, List LoadedCVS ), Cmd Msg )
+init : () -> ( ( Model, LoadedCVS ), Cmd Msg )
 init _ =
-    ( ( Loading, [] )
-    , Cmd.batch (List.map sendHttpRequest urls)
+    ( ( Loading, LoadedCVS "default" "default" )
+    , Http.get
+        { url = "https://raw.githubusercontent.com/DiSinhPham/BankMarketingCampaignVisualization/main/data/bank-full.csv"
+        , expect = expectStringDetailed GotText
+        }
     )
 
 
@@ -72,16 +75,6 @@ expectStringDetailed : (Result ErrorDetailed ( Http.Metadata, String ) -> msg) -
 expectStringDetailed msg =
     Http.expectStringResponse msg convertResponseString
 
-
-sendHttpRequest : String -> Cmd Msg
-sendHttpRequest givenUrl =
-    Http.get
-        { url = givenUrl
-        , expect = expectStringDetailed GotText
-        }
-
-
-
 -- UPDATE
 
 
@@ -89,8 +82,8 @@ type Msg
     = GotText (Result ErrorDetailed ( Http.Metadata, String ))
 
 
-update : Msg -> ( Model, List LoadedCVS ) -> ( ( Model, List LoadedCVS ), Cmd Msg )
-update msg ( model, loadedFiles ) =
+update : Msg -> ( Model, LoadedCVS ) -> ( ( Model, LoadedCVS ), Cmd Msg )
+update msg ( model, loadedFile ) =
     let
         newModel =
             case msg of
@@ -102,26 +95,26 @@ update msg ( model, loadedFiles ) =
                         Err detailedError ->
                             Failure detailedError
 
-        updatedFileList =
+        updatedFile =
             case newModel of
                 Failure error ->
-                    loadedFiles
+                    loadedFile
 
                 Loading ->
-                    loadedFiles
+                    loadedFile
 
                 Success ( metadata, body ) ->
-                    loadedFiles ++ [ LoadedCVS metadata.url body ]
+                    LoadedCVS metadata.url body
     in
-    ( ( newModel, updatedFileList ), Cmd.none )
+    ( ( newModel, updatedFile ), Cmd.none )
 
 
 
 -- SUBSCRIPTIONS
 
 
-subscriptions : ( Model, List LoadedCVS ) -> Sub Msg
-subscriptions ( model, loadedFiles ) =
+subscriptions : ( Model, LoadedCVS ) -> Sub Msg
+subscriptions ( model, loadedFile ) =
     Sub.none
 
 
@@ -129,14 +122,14 @@ subscriptions ( model, loadedFiles ) =
 -- VIEW
 
 
-view : ( Model, List LoadedCVS ) -> Html Msg
-view ( model, loadedFiles ) =
+view : ( Model, LoadedCVS ) -> Html Msg
+view ( model, loadedFile ) =
     let
         cvsStringToHtml : LoadedCVS -> List (Html Msg)
         cvsStringToHtml cvs =
              Html.p [] [ text cvs.url ] :: [pre [] [ text (String.left 1000 cvs.contents) ]]
         
-        htmlList = List.concat (List.map cvsStringToHtml loadedFiles)
+        htmlList = cvsStringToHtml loadedFile
     in
     case model of
         Failure error ->
@@ -149,10 +142,3 @@ view ( model, loadedFiles ) =
             div []
                 (htmlList)
                 
-
-
-urls : List String
-urls =
-    [
-    "https://raw.githubusercontent.com/DiSinhPham/BankMarketingCampaignVisualization/main/data/bank-full.csv"
-    ]
