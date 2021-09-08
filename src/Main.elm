@@ -127,7 +127,7 @@ view ( model, loadedFile ) =
     let
         cvsStringToHtml : LoadedCVS -> List (Html Msg)
         cvsStringToHtml cvs =
-             Html.p [] [ text cvs.url ] :: [pre [] [ text (String.left 1000 cvs.contents) ]]
+             Html.p [] [ text cvs.url ] :: [pre [] [ text (cvs.contents) ]]
         
         htmlList = cvsStringToHtml loadedFile
     in
@@ -142,3 +142,56 @@ view ( model, loadedFile ) =
             div []
                 (htmlList)
                 
+type alias Person =
+    { age : Int
+    , job : Job
+    , marital : Marital
+    , education : Education
+    , default : Bool
+    , balance : Int
+    , housing : Bool
+    , loan : Bool
+    }
+
+type alias CampaignInfo =
+    { person : Person
+    , contactType : Contact
+    , day : Int
+    , month : Int
+    , duration : Int
+    , contactCount : Int
+    , outcome : Bool
+    , pdays : Int
+    , pcontactCount : Int
+    , poutcome : Bool
+    }
+    
+type Job 
+    = Admin 
+    | UnknownJob
+    | Unemployed
+    | Management
+    | Housemaid
+    | Entrepreneur
+    | Student
+    | BlueCollar
+    | SelfEmployed
+    | Retired
+    | Technician
+    | Services
+
+type Marital
+    = Married
+    | Divorced
+    | Single
+
+type Education 
+    = UnknownEd
+    | Primary
+    | Secondary
+    | Tertiary
+
+type Contact
+    = UnknownContact
+    | Telephone
+    | Cellular
