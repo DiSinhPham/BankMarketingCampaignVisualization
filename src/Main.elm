@@ -9,9 +9,11 @@ import Html exposing (Html, button, div, pre)
 import Html.Attributes exposing (disabled)
 import Html.Events exposing (onClick)
 import Http
+import Maybe exposing (withDefault)
 import Path exposing (Path)
-import Scale exposing (ContinuousScale)
+import Scale exposing (ContinuousScale, point)
 import Shape
+import Statistics
 import String exposing (fromFloat)
 import Task exposing (fail)
 import Tree exposing (Tree)
@@ -61,7 +63,7 @@ type alias LoadedCSV =
 
 init : () -> ( ( Model, LoadedCSV, ( List DemographicDataType, DataSet ) ), Cmd Msg )
 init _ =
-    ( ( Loading, LoadedCSV "default" "default", ( [ DemoJob, DemoEducation, DemoBalance, DemoAge, DemoMarital ], Demographic ) )
+    ( ( Loading, LoadedCSV "default" "default", ( [ DemoJob, DemoEducation, DemoBalance, DemoAge, DemoMarital ], Timeline ) )
     , Http.get
         { url = "https://raw.githubusercontent.com/DiSinhPham/BankMarketingCampaignVisualization/main/data/bank-full.csv"
         , expect = expectStringDetailed GotText
@@ -208,17 +210,18 @@ view ( model, loadedFile, ( axisOrder, dataSet ) ) =
         campaignInfoList =
             csvStringToCampaignInfo loadedFile.contents
 
-        datasetView = 
+        datasetView =
             case dataSet of
                 Demographic ->
-                    demographicPersonalView personList axisOrder 
-                    ++ demographicFinanceView personList
+                    demographicPersonalView personList axisOrder
+                        ++ demographicFinanceView personList
+
                 Timeline ->
-                    [div [] []]
+                    monthlyTimeLineView campaignInfoList
+                        ++ dailyTimeLineView campaignInfoList
+
                 Familiarity ->
-                     [div [] []]
-
-
+                    [ div [] [] ]
     in
     case model of
         Failure error ->
@@ -243,6 +246,302 @@ type DataSet
     = Demographic
     | Timeline
     | Familiarity
+
+
+
+-- Timeline View
+-- Daily
+dailyTimeLineView : List CampaignInfo -> List (Html Msg)
+dailyTimeLineView campaignInfo =
+    let
+        w =
+            900
+
+        timePadding =
+            60
+
+        days =
+            List.map (\n -> n) (List.range 1 31)
+
+        daysFloat =
+            List.map (\n -> toFloat n) days
+
+        successdaily =
+            List.map (\n -> toFloat (List.length (List.filter (\m -> (m.day == n) && outcomeToBool m.output) campaignInfo)) / toFloat (List.length (List.filter (\m -> m.day == n) campaignInfo))) days
+
+        totalContact =
+            List.map (\n -> toFloat (List.length (List.filter (\m -> m.day == n) campaignInfo))) days
+
+        pointList =
+            List.map3 (\n m l -> Point (String.fromInt n) (toFloat n) m l) days totalContact successdaily
+
+        aspectRatio =
+            pointList |> computeAspectRatio |> Maybe.withDefault 2
+
+        --Calculate Axis Scales
+        xScale : ContinuousScale Float
+        xScale =
+            Scale.linear ( 0, w - 2 * timePadding ) (wideExtent daysFloat 31)
+
+        yScale : ContinuousScale Float
+        yScale =
+            if ((w / aspectRatio) - 2 * timePadding) >= 0 then
+                Scale.linear ( (w / aspectRatio) - 2 * timePadding, 0 ) (wideExtent totalContact 10)
+
+            else
+                Scale.linear ( w / aspectRatio, 0 ) (wideExtent totalContact 10)
+
+        zScale : ContinuousScale Float
+        zScale =
+            if ((w / aspectRatio) - 2 * timePadding) >= 0 then
+                Scale.linear ( (w / aspectRatio) - 2 * timePadding, 0 ) (wideExtent successdaily 6)
+
+            else
+                Scale.linear ( w / aspectRatio, 0 ) (wideExtent successdaily 6)
+
+        contactLineGenerator : ( Float, Float ) -> Maybe ( Float, Float )
+        contactLineGenerator ( x, y ) =
+            Just ( Scale.convert xScale x, Scale.convert yScale y )
+
+        contactLine : Path
+        contactLine =
+            List.map (\i -> ( .x i, .y i )) pointList
+                |> List.map contactLineGenerator
+                |> Shape.line Shape.linearCurve
+
+        successLineGenerator : ( Float, Float ) -> Maybe ( Float, Float )
+        successLineGenerator ( x, z ) =
+            Just ( Scale.convert xScale x, Scale.convert zScale z )
+
+        successLine : Path
+        successLine =
+            List.map (\i -> ( .x i, .z i )) pointList
+                |> List.map successLineGenerator
+                |> Shape.line Shape.linearCurve
+    in
+    [ div []
+        [ 
+            Html.p [] [ Html.text "Daily Campaign Breakdown" ]
+            , svg
+            [ viewBox 0 0 (w + 2 * timePadding) ((w / aspectRatio) + 2 * timePadding)
+            , TypedSvg.Attributes.width <| TypedSvg.Types.Percent 100
+            , TypedSvg.Attributes.height <| TypedSvg.Types.Percent 100
+            , TypedSvg.Attributes.preserveAspectRatio (TypedSvg.Types.Align TypedSvg.Types.ScaleMin TypedSvg.Types.ScaleMin) TypedSvg.Types.Slice
+            ]
+            [ g
+                [ class [ "axis" ]
+                , transform
+                    [ Translate timePadding
+                        (if ((w / aspectRatio) - 2 * timePadding) >= 0 then
+                            (w / aspectRatio) - timePadding
+
+                         else
+                            (w / aspectRatio) + timePadding
+                        )
+                    ]
+                ]
+                [ Axis.bottom [ Axis.tickCount 31 ] xScale, text_ [ x ((w / 2) - timePadding), y 30, fontFamily [ "sans-serif" ], fontSize (TypedSvg.Types.px 10), textAnchor AnchorMiddle ] [ text "days of month" ] ]
+            , g
+                [ class [ "axis" ]
+                , transform [ Translate timePadding timePadding ]
+                ]
+                [ Axis.left [ Axis.tickCount 6 ] zScale
+                , text_ [ x 0, y -10, fontFamily [ "sans-serif" ], fontSize (TypedSvg.Types.px 10), fill (Paint (Color.rgb 0 0 255)) ] [ text "Success Rate" ]
+                , g [ transform [ Translate 0 0 ], class [ "series" ] ]
+                    [ Path.element successLine [ stroke (Paint (Color.rgb 0 0 255)), strokeWidth (Px 1), fill PaintNone ]
+                    ]
+                ]
+            , g
+                [ class [ "axis" ]
+                , transform [ Translate (w - timePadding) timePadding ]
+                ]
+                [ Axis.right [ Axis.tickCount 5 ] yScale
+                , text_ [ x (-timePadding), y -10, fontFamily [ "sans-serif" ], fontSize (TypedSvg.Types.px 10), fill (Paint (Color.rgb 0 0 0)) ] [ text "Contact Count" ]
+                , g [ transform [ Translate ((2*timePadding)-w) 0 ], class [ "series" ] ]
+                    [ Path.element contactLine [ stroke (Paint (Color.rgb 0 0 0)), strokeWidth (Px 1), fill PaintNone ]
+                    ]
+                ]
+            ]
+        ]
+    ]
+-- Monthly
+monthlyTimeLineView : List CampaignInfo -> List (Html Msg)
+monthlyTimeLineView campaignInfo =
+    let
+        w =
+            900
+
+        timePadding =
+            60
+
+        months =
+            List.map (\n -> n) (List.range 1 12)
+
+        monthsFloat =
+            List.map (\n -> toFloat n) months
+
+        successmonthly =
+            List.map (\n -> toFloat (List.length (List.filter (\m -> (m.month == n) && outcomeToBool m.output) campaignInfo)) / toFloat (List.length (List.filter (\m -> m.month == n) campaignInfo))) months
+
+        totalContact =
+            List.map (\n -> toFloat (List.length (List.filter (\m -> m.month == n) campaignInfo))) months
+
+        pointList =
+            List.map3 (\n m l -> Point (intToMonth n) (toFloat n) m l) months totalContact successmonthly
+
+        aspectRatio =
+            pointList |> computeAspectRatio |> Maybe.withDefault 2
+
+        --Calculate Axis Scales
+        xScale : ContinuousScale Float
+        xScale =
+            Scale.linear ( 0, w - 2 * timePadding ) (wideExtent monthsFloat 12)
+
+        yScale : ContinuousScale Float
+        yScale =
+            if ((w / aspectRatio) - 2 * timePadding) >= 0 then
+                Scale.linear ( (w / aspectRatio) - 2 * timePadding, 0 ) (wideExtent totalContact 10)
+
+            else
+                Scale.linear ( w / aspectRatio, 0 ) (wideExtent totalContact 10)
+
+        zScale : ContinuousScale Float
+        zScale =
+            if ((w / aspectRatio) - 2 * timePadding) >= 0 then
+                Scale.linear ( (w / aspectRatio) - 2 * timePadding, 0 ) (wideExtent successmonthly 6)
+
+            else
+                Scale.linear ( w / aspectRatio, 0 ) (wideExtent successmonthly 6)
+
+        contactLineGenerator : ( Float, Float ) -> Maybe ( Float, Float )
+        contactLineGenerator ( x, y ) =
+            Just ( Scale.convert xScale x, Scale.convert yScale y )
+
+        contactLine : Path
+        contactLine =
+            List.map (\i -> ( .x i, .y i )) pointList
+                |> List.map contactLineGenerator
+                |> Shape.line Shape.linearCurve
+
+        successLineGenerator : ( Float, Float ) -> Maybe ( Float, Float )
+        successLineGenerator ( x, z ) =
+            Just ( Scale.convert xScale x, Scale.convert zScale z )
+
+        successLine : Path
+        successLine =
+            List.map (\i -> ( .x i, .z i )) pointList
+                |> List.map successLineGenerator
+                |> Shape.line Shape.linearCurve
+    in
+    [ div []
+        [ 
+            Html.p [] [ Html.text "Monthly Campaign Breakdown" ]
+            , svg
+            [ viewBox 0 0 (w + 2 * timePadding) ((w / aspectRatio) + 2 * timePadding)
+            , TypedSvg.Attributes.width <| TypedSvg.Types.Percent 100
+            , TypedSvg.Attributes.height <| TypedSvg.Types.Percent 100
+            , TypedSvg.Attributes.preserveAspectRatio (TypedSvg.Types.Align TypedSvg.Types.ScaleMin TypedSvg.Types.ScaleMin) TypedSvg.Types.Slice
+            ]
+            [ g
+                [ class [ "axis" ]
+                , transform
+                    [ Translate timePadding
+                        (if ((w / aspectRatio) - 2 * timePadding) >= 0 then
+                            (w / aspectRatio) - timePadding
+
+                         else
+                            (w / aspectRatio) + timePadding
+                        )
+                    ]
+                ]
+                [ Axis.bottom [ Axis.tickCount 12 ] xScale, text_ [ x ((w / 2) - timePadding), y 30, fontFamily [ "sans-serif" ], fontSize (TypedSvg.Types.px 10), textAnchor AnchorMiddle ] [ text "months of year" ] ]
+            , g
+                [ class [ "axis" ]
+                , transform [ Translate timePadding timePadding ]
+                ]
+                [ Axis.left [ Axis.tickCount 6 ] zScale
+                , text_ [ x 0, y -10, fontFamily [ "sans-serif" ], fontSize (TypedSvg.Types.px 20), fill (Paint (Color.rgb 0 0 255)) ] [ text "Success Rate" ]
+                , g [ transform [ Translate 0 0 ], class [ "series" ] ]
+                    [ Path.element successLine [ stroke (Paint (Color.rgb 0 0 255)), strokeWidth (Px 1), fill PaintNone ]
+                    ]
+                ]
+            , g
+                [ class [ "axis" ]
+                , transform [ Translate (w - timePadding) timePadding ]
+                ]
+                [ Axis.right [ Axis.tickCount 10 ] yScale
+                , text_ [ x (-timePadding*2), y -10, fontFamily [ "sans-serif" ], fontSize (TypedSvg.Types.px 20), fill (Paint (Color.rgb 0 0 0)) ] [ text "Contact Count" ]
+                , g [ transform [ Translate ((2*timePadding)-w) 0 ], class [ "series" ] ]
+                    [ Path.element contactLine [ stroke (Paint (Color.rgb 0 0 0)), strokeWidth (Px 1), fill PaintNone ]
+                    ]
+                ]
+            ]
+        ]
+    ]
+
+
+wideExtent : List Float -> Int -> ( Float, Float )
+wideExtent values tickCount =
+    let
+        minimum =
+            Maybe.withDefault 0 (List.minimum values)
+
+        maximum =
+            Maybe.withDefault 100 (List.maximum values)
+
+        extraRange =
+            (maximum - minimum) / toFloat (2 * tickCount)
+    in
+    ( max 0 (minimum - extraRange), maximum + extraRange )
+
+
+mapConsecutive : (a -> a -> b) -> List a -> Maybe (List b)
+mapConsecutive f l =
+    Maybe.map (\l2 -> List.map2 f l l2) <| List.tail l
+
+
+computeAspectRatio : List Point -> Maybe Float
+computeAspectRatio data =
+    let
+        s =
+            mapConsecutive (\a b -> abs <| (b.y - a.y) / (b.x - a.x)) data
+
+        -- Berechnung für Median
+        m_sm =
+            Maybe.andThen (Statistics.quantile 0.5) (Maybe.map List.sort s)
+
+        -- Berechnung für Range von x, d.h. min und max
+        rx =
+            Statistics.extent (List.map .x data)
+
+        -- Berechnung für Range von y, d.h. min und max
+        ry =
+            Statistics.extent (List.map .y data)
+    in
+    Maybe.map3
+        (\sm ( xmin, xmax ) ( ymin, ymax ) ->
+            -- Code zu Berechnung des Aspect Ratios
+            sm * ((xmax - xmin) / (ymax - ymin))
+        )
+        m_sm
+        rx
+        ry
+
+
+type alias Point =
+    { pointName : String
+    , x : Float
+    , y : Float
+    , z : Float
+    }
+
+
+type alias XyzData =
+    { xDescription : String
+    , yDescription : String
+    , zDescription : String
+    , data : List Point
+    }
 
 
 
@@ -714,7 +1013,7 @@ demographicPersonalView clientList axisOrder =
 
         xScale : ContinuousScale Float
         xScale =
-            Scale.linear ( 0, demoW - 2 * demoPadding ) (wideExtent xValues 5)
+            Scale.linear ( 0, demoW - 2 * demoPadding ) (extent xValues 5)
 
         lineGenerator : ( Float, Float ) -> Maybe ( Float, Float )
         lineGenerator ( x, y ) =
@@ -836,19 +1135,19 @@ createMultiDimData clientList axisOrder =
             getFloatListFromDemoDataType (Maybe.withDefault DemoAge (List.head (List.drop 4 axisOrder))) clientList
 
         firstScale =
-            Scale.linear ( demoH - 2 * demoPadding, 0 ) (wideExtent firstFloatList 11)
+            Scale.linear ( demoH - 2 * demoPadding, 0 ) (extent firstFloatList 11)
 
         secondScale =
-            Scale.linear ( demoH - 2 * demoPadding, 0 ) (wideExtent secondFloatList 4)
+            Scale.linear ( demoH - 2 * demoPadding, 0 ) (extent secondFloatList 4)
 
         thirdScale =
-            Scale.linear ( demoH - 2 * demoPadding, 0 ) (wideExtent thirdFloatList 9)
+            Scale.linear ( demoH - 2 * demoPadding, 0 ) (extent thirdFloatList 9)
 
         fourthScale =
-            Scale.linear ( demoH - 2 * demoPadding, 0 ) (wideExtent fourthFloatList 10)
+            Scale.linear ( demoH - 2 * demoPadding, 0 ) (extent fourthFloatList 10)
 
         fifthScale =
-            Scale.linear ( demoH - 2 * demoPadding, 0 ) (wideExtent fifthFloatList 3)
+            Scale.linear ( demoH - 2 * demoPadding, 0 ) (extent fifthFloatList 3)
 
         scaleList =
             [ firstScale, secondScale, thirdScale, fourthScale, fifthScale ]
@@ -1057,17 +1356,14 @@ drawLine accepted line =
 -- Calculate Extents for Axis
 
 
-wideExtent : List Float -> Int -> ( Float, Float )
-wideExtent values tickCount =
+extent : List Float -> Int -> ( Float, Float )
+extent values tickCount =
     let
         minimum =
             Maybe.withDefault 0 (List.minimum values)
 
         maximum =
             Maybe.withDefault 100 (List.maximum values)
-
-        extraRange =
-            (maximum - minimum) / toFloat (2 * tickCount)
     in
     ( minimum, maximum )
 
@@ -1451,3 +1747,46 @@ outcomeToBool outcome =
 
         _ ->
             False
+
+
+intToMonth : Int -> String
+intToMonth month =
+    case month of
+        1 ->
+            "jan"
+
+        2 ->
+            "feb"
+
+        3 ->
+            "mar"
+
+        4 ->
+            "apr"
+
+        5 ->
+            "may"
+
+        6 ->
+            "jun"
+
+        7 ->
+            "jul"
+
+        8 ->
+            "aug"
+
+        9 ->
+            "sep"
+
+        10 ->
+            "oct"
+
+        11 ->
+            "nov"
+
+        12 ->
+            "dec"
+
+        _ ->
+            "err"
