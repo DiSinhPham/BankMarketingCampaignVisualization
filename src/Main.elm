@@ -59,9 +59,9 @@ type alias LoadedCSV =
     }
 
 
-init : () -> ( ( Model, LoadedCSV, List DemographicDataType ), Cmd Msg )
+init : () -> ( ( Model, LoadedCSV, ( List DemographicDataType, DataSet ) ), Cmd Msg )
 init _ =
-    ( ( Loading, LoadedCSV "default" "default", [ DemoJob, DemoEducation, DemoBalance, DemoAge, DemoMarital ] )
+    ( ( Loading, LoadedCSV "default" "default", ( [ DemoJob, DemoEducation, DemoBalance, DemoAge, DemoMarital ], Demographic ) )
     , Http.get
         { url = "https://raw.githubusercontent.com/DiSinhPham/BankMarketingCampaignVisualization/main/data/bank-full.csv"
         , expect = expectStringDetailed GotText
@@ -73,8 +73,8 @@ init _ =
 -- UPDATE
 
 
-update : Msg -> ( Model, LoadedCSV, List DemographicDataType ) -> ( ( Model, LoadedCSV, List DemographicDataType ), Cmd Msg )
-update msg ( model, loadedFile, axisOrder ) =
+update : Msg -> ( Model, LoadedCSV, ( List DemographicDataType, DataSet ) ) -> ( ( Model, LoadedCSV, ( List DemographicDataType, DataSet ) ), Cmd Msg )
+update msg ( model, loadedFile, ( axisOrder, dataSet ) ) =
     let
         newModel =
             case msg of
@@ -106,6 +106,20 @@ update msg ( model, loadedFile, axisOrder ) =
                 _ ->
                     axisOrder
 
+        newDataSet =
+            case msg of
+                DemographicView ->
+                    Demographic
+
+                TimelineView ->
+                    Timeline
+
+                FamiliarityView ->
+                    Familiarity
+
+                _ ->
+                    dataSet
+
         updatedFile =
             case newModel of
                 Failure error ->
@@ -117,15 +131,15 @@ update msg ( model, loadedFile, axisOrder ) =
                 Success ( metadata, body ) ->
                     LoadedCSV metadata.url body
     in
-    ( ( newModel, updatedFile, newAxisOrder ), Cmd.none )
+    ( ( newModel, updatedFile, ( newAxisOrder, newDataSet ) ), Cmd.none )
 
 
 
 -- SUBSCRIPTIONS
 
 
-subscriptions : ( Model, LoadedCSV, List DemographicDataType ) -> Sub Msg
-subscriptions ( model, loadedFile, axisOrder ) =
+subscriptions : ( Model, LoadedCSV, ( List DemographicDataType, DataSet ) ) -> Sub Msg
+subscriptions ( model, loadedFile, ( axisOrder, dataSet ) ) =
     Sub.none
 
 
@@ -133,8 +147,8 @@ subscriptions ( model, loadedFile, axisOrder ) =
 -- VIEW
 
 
-view : ( Model, LoadedCSV, List DemographicDataType ) -> Html Msg
-view ( model, loadedFile, axisOrder ) =
+view : ( Model, LoadedCSV, ( List DemographicDataType, DataSet ) ) -> Html Msg
+view ( model, loadedFile, ( axisOrder, dataSet ) ) =
     let
         csvStringToHtml : LoadedCSV -> List (Html Msg)
         csvStringToHtml csv =
@@ -193,6 +207,18 @@ view ( model, loadedFile, axisOrder ) =
 
         campaignInfoList =
             csvStringToCampaignInfo loadedFile.contents
+
+        datasetView = 
+            case dataSet of
+                Demographic ->
+                    demographicPersonalView personList axisOrder 
+                    ++ demographicFinanceView personList
+                Timeline ->
+                    [div [] []]
+                Familiarity ->
+                     [div [] []]
+
+
     in
     case model of
         Failure error ->
@@ -204,14 +230,19 @@ view ( model, loadedFile, axisOrder ) =
         Success ( metadata, body ) ->
             div []
                 ([ Html.p [] [ Html.text "Bank Marketing Campaign Analysis" ]
-                 , button [] [ text "Demographics Analysis" ]
-                 , button [] [ text "Campaign Timeline" ]
-                 , button [] [ text "Brand Familiarity" ]
+                 , button [ onClick DemographicView ] [ text "Demographics Analysis" ]
+                 , button [ onClick TimelineView ] [ text "Campaign Timeline" ]
+                 , button [ onClick FamiliarityView ] [ text "Brand Familiarity" ]
                  , Html.p [] []
                  ]
-                    ++ demographicPersonalView personList axisOrder
-                    ++ demographicFinanceView personList
+                    ++ datasetView
                 )
+
+
+type DataSet
+    = Demographic
+    | Timeline
+    | Familiarity
 
 
 
@@ -1075,6 +1106,9 @@ type Msg
     | Swap_2_3
     | Swap_3_4
     | Swap_4_5
+    | DemographicView
+    | TimelineView
+    | FamiliarityView
 
 
 
