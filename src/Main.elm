@@ -6,16 +6,13 @@ import Color
 import Csv
 import Csv.Decode
 import Html exposing (Html, button, div, pre)
-import Html.Attributes exposing (disabled)
 import Html.Events exposing (onClick)
 import Http
-import Maybe exposing (withDefault)
 import Path exposing (Path)
-import Scale exposing (ContinuousScale, point)
+import Scale exposing (ContinuousScale)
 import Shape
 import Statistics
-import String exposing (fromFloat)
-import Task exposing (fail)
+import String exposing (toInt)
 import Tree exposing (Tree)
 import TypedSvg exposing (circle, g, line, polygon, rect, style, svg, text_)
 import TypedSvg.Attributes exposing (class, color, d, fill, fontFamily, fontSize, points, stroke, strokeWidth, textAnchor, transform, viewBox)
@@ -63,7 +60,7 @@ type alias LoadedCSV =
 
 init : () -> ( ( Model, LoadedCSV, ( List DemographicDataType, DataSet ) ), Cmd Msg )
 init _ =
-    ( ( Loading, LoadedCSV "default" "default", ( [ DemoJob, DemoEducation, DemoBalance, DemoAge, DemoMarital ], Timeline ) )
+    ( ( Loading, LoadedCSV "default" "default", ( [ DemoJob, DemoEducation, DemoBalance, DemoAge, DemoMarital ], Familiarity ) )
     , Http.get
         { url = "https://raw.githubusercontent.com/DiSinhPham/BankMarketingCampaignVisualization/main/data/bank-full.csv"
         , expect = expectStringDetailed GotText
@@ -221,7 +218,7 @@ view ( model, loadedFile, ( axisOrder, dataSet ) ) =
                         ++ dailyTimeLineView campaignInfoList
 
                 Familiarity ->
-                    [ div [] [] ]
+                    campaignFamiliarityView campaignInfoList
     in
     case model of
         Failure error ->
@@ -249,8 +246,194 @@ type DataSet
 
 
 
+-- Familiarity View
+
+
+campaignFamiliarityView : List CampaignInfo -> List (Html Msg)
+campaignFamiliarityView campaignInfo =
+    let
+        a =
+            0
+
+        familiarW =
+            900
+
+        familiarH =
+            450
+
+        familiarPadding =
+            60
+
+        ccount =
+            List.map (\n -> toFloat n.contactCount) campaignInfo
+
+        duration =
+            List.map (\n -> toFloat n.duration) campaignInfo
+
+        currentCampaignList =
+            List.map2 (\n m -> ( n, m )) ccount duration
+
+        previousCampaignList =
+            List.map (\n -> ( toFloat n.pdays, toFloat n.pcontactCount )) campaignInfo
+
+        outcomesList =
+            List.map (\n -> ( n.output, n.poutcome )) campaignInfo
+
+        contactTypeList =
+            List.map (\n -> n.contactType) campaignInfo
+
+        campaignPointList =
+            List.map4 createCampaignPoint currentCampaignList previousCampaignList outcomesList contactTypeList
+
+        countScale : ContinuousScale Float
+        countScale =
+            Scale.linear ( 0, familiarW - 2 * familiarPadding ) (wideExtent ccount (round (Maybe.withDefault 10 (List.maximum ccount))))
+
+        durationScale : ContinuousScale Float
+        durationScale =
+            Scale.linear ( familiarH - 2 * familiarPadding, 0 ) (wideExtent duration 10)
+    in
+    [ Html.p [] [ Html.text "Campaign Contact Breakdown" ]
+    , svg [ viewBox 0 0 familiarW familiarH, TypedSvg.Attributes.width <| TypedSvg.Types.Percent 100, TypedSvg.Attributes.height <| TypedSvg.Types.Percent 100 ]
+        ([ style [] [ TypedSvg.Core.text """
+
+                .point:hover rect { stroke: rgba(0, 0, 0,1.0); fill: rgb(255, 255, 255); }
+                .point:hover polygon { stroke: rgba(0, 0, 0,1.0); fill: rgb(255, 255, 255); }
+                .point text { display: none; }
+                .point:hover text { display: inline; }
+              """ ]
+         , g
+            [ class [ "axis" ]
+            , transform [ Translate familiarPadding (familiarH - familiarPadding) ]
+            ]
+            [ Axis.bottom [ Axis.tickCount (round (Maybe.withDefault 10 (List.maximum ccount))) ] countScale, text_ [ x ((familiarW / 2) - familiarPadding), y (familiarPadding / 2), fontFamily [ "sans-serif" ], fontSize (TypedSvg.Types.px 10), textAnchor AnchorMiddle ] [ text "Contact Count" ] ]
+         , g
+            [ class [ "axis" ]
+            , transform [ Translate familiarPadding familiarPadding ]
+            ]
+            [ Axis.left [ Axis.tickCount 10 ] durationScale, text_ [ x 0, y (-familiarPadding / 2), fontFamily [ "sans-serif" ], fontSize (TypedSvg.Types.px 10), textAnchor AnchorMiddle ] [ text "Duration" ] ]
+         ]
+            ++ List.map (getPointFromData countScale durationScale) campaignPointList
+        )
+    ]
+
+
+getPointFromData : ContinuousScale Float -> ContinuousScale Float -> CampaignPoint -> Svg msg
+getPointFromData xScale yScale campaignPoint =
+    let
+        posX : Float
+        posX =
+            Scale.convert xScale campaignPoint.contactCount
+
+        posY : Float
+        posY =
+            Scale.convert yScale campaignPoint.duration
+    in
+    g
+        [ class [ "point" ]
+        , transform [ Translate 60 60 ]
+        ]
+        [ text_
+            [ TypedSvg.Attributes.x <| TypedSvg.Types.px (posX - 4)
+            , TypedSvg.Attributes.y <| TypedSvg.Types.px (posY - 4)
+            , textAnchor AnchorStart
+            , fontSize (TypedSvg.Types.px 10)
+            , TypedSvg.Attributes.stroke <| TypedSvg.Types.Paint Color.black
+            , TypedSvg.Attributes.strokeWidth <| TypedSvg.Types.px 0.8
+            , TypedSvg.Attributes.fill <| TypedSvg.Types.Paint Color.white
+            ]
+            [ text (Debug.toString campaignPoint) ]
+        , objectFromContactType campaignPoint.contactType posX posY campaignPoint.outcome campaignPoint.poutcome
+        ]
+
+
+colorFromOutcome : Outcome -> Color.Color
+colorFromOutcome outcome =
+    case outcome of
+        Accepted ->
+            Color.rgba 0 0 200 0.3
+
+        Declined ->
+            Color.rgba 200 0 0 0.3
+
+        UnknownOutcome ->
+            Color.rgba 20 20 20 0.3
+
+        Other ->
+            Color.rgba 0 0 0 0.3
+
+
+colorFromOutcome2 : Outcome -> Color.Color
+colorFromOutcome2 outcome =
+    case outcome of
+        Accepted ->
+            Color.rgba 0 0 200 0.5
+
+        Declined ->
+            Color.rgba 200 0 0 0.5
+
+        UnknownOutcome ->
+            Color.rgba 20 20 20 0.5
+
+        Other ->
+            Color.rgba 0 0 0 0.5
+
+
+objectFromContactType : Contact -> Float -> Float -> Outcome -> Outcome -> Svg msg
+objectFromContactType contact posX posY outcome poutcome =
+    case contact of
+        Cellular ->
+            polygon
+                [ points [ ( posX + 2, posY + 2 ), ( posX + 2, posY - 2 ), ( posX + 4, posY ) ]
+                , TypedSvg.Attributes.stroke <| TypedSvg.Types.Paint (colorFromOutcome2 poutcome)
+                , TypedSvg.Attributes.strokeWidth <| TypedSvg.Types.px 0.5
+                , TypedSvg.Attributes.fill <| TypedSvg.Types.Paint (colorFromOutcome outcome)
+                ]
+                [ text "test" ]
+
+        Telephone ->
+            polygon
+                [ points [ ( posX - 2, posY + 2 ), ( posX - 2, posY - 2 ), ( posX - 4, posY ) ]
+                , TypedSvg.Attributes.stroke <| TypedSvg.Types.Paint (colorFromOutcome2 poutcome)
+                , TypedSvg.Attributes.strokeWidth <| TypedSvg.Types.px 0.5
+                , TypedSvg.Attributes.fill <| TypedSvg.Types.Paint (colorFromOutcome outcome)
+                ]
+                []
+
+        UnknownContact ->
+            rect
+                [ TypedSvg.Attributes.x <| TypedSvg.Types.px (posX - 1)
+                , TypedSvg.Attributes.y <| TypedSvg.Types.px (posY - 1)
+                , TypedSvg.Attributes.width <| TypedSvg.Types.px 2
+                , TypedSvg.Attributes.height <| TypedSvg.Types.px 2
+                , TypedSvg.Attributes.stroke <| TypedSvg.Types.Paint (colorFromOutcome2 poutcome)
+                , TypedSvg.Attributes.strokeWidth <| TypedSvg.Types.px 0.5
+                , TypedSvg.Attributes.fill <| TypedSvg.Types.Paint (colorFromOutcome outcome)
+                ]
+                []
+
+
+createCampaignPoint : ( Float, Float ) -> ( Float, Float ) -> ( Outcome, Outcome ) -> Contact -> CampaignPoint
+createCampaignPoint ( contactCount, duration ) ( pdays, pcontactCount ) ( outcome, poutcome ) contactType =
+    CampaignPoint contactCount duration contactType poutcome outcome pcontactCount pdays
+
+
+type alias CampaignPoint =
+    { contactCount : Float
+    , duration : Float
+    , contactType : Contact
+    , poutcome : Outcome
+    , outcome : Outcome
+    , pcount : Float
+    , pdays : Float
+    }
+
+
+
 -- Timeline View
 -- Daily
+
+
 dailyTimeLineView : List CampaignInfo -> List (Html Msg)
 dailyTimeLineView campaignInfo =
     let
@@ -320,9 +503,8 @@ dailyTimeLineView campaignInfo =
                 |> Shape.line Shape.linearCurve
     in
     [ div []
-        [ 
-            Html.p [] [ Html.text "Daily Campaign Breakdown" ]
-            , svg
+        [ Html.p [] [ Html.text "Daily Campaign Breakdown" ]
+        , svg
             [ viewBox 0 0 (w + 2 * timePadding) ((w / aspectRatio) + 2 * timePadding)
             , TypedSvg.Attributes.width <| TypedSvg.Types.Percent 100
             , TypedSvg.Attributes.height <| TypedSvg.Types.Percent 100
@@ -356,15 +538,20 @@ dailyTimeLineView campaignInfo =
                 , transform [ Translate (w - timePadding) timePadding ]
                 ]
                 [ Axis.right [ Axis.tickCount 5 ] yScale
-                , text_ [ x (-timePadding), y -10, fontFamily [ "sans-serif" ], fontSize (TypedSvg.Types.px 10), fill (Paint (Color.rgb 0 0 0)) ] [ text "Contact Count" ]
-                , g [ transform [ Translate ((2*timePadding)-w) 0 ], class [ "series" ] ]
+                , text_ [ x -timePadding, y -10, fontFamily [ "sans-serif" ], fontSize (TypedSvg.Types.px 10), fill (Paint (Color.rgb 0 0 0)) ] [ text "Contact Count" ]
+                , g [ transform [ Translate ((2 * timePadding) - w) 0 ], class [ "series" ] ]
                     [ Path.element contactLine [ stroke (Paint (Color.rgb 0 0 0)), strokeWidth (Px 1), fill PaintNone ]
                     ]
                 ]
             ]
         ]
     ]
+
+
+
 -- Monthly
+
+
 monthlyTimeLineView : List CampaignInfo -> List (Html Msg)
 monthlyTimeLineView campaignInfo =
     let
@@ -434,9 +621,8 @@ monthlyTimeLineView campaignInfo =
                 |> Shape.line Shape.linearCurve
     in
     [ div []
-        [ 
-            Html.p [] [ Html.text "Monthly Campaign Breakdown" ]
-            , svg
+        [ Html.p [] [ Html.text "Monthly Campaign Breakdown" ]
+        , svg
             [ viewBox 0 0 (w + 2 * timePadding) ((w / aspectRatio) + 2 * timePadding)
             , TypedSvg.Attributes.width <| TypedSvg.Types.Percent 100
             , TypedSvg.Attributes.height <| TypedSvg.Types.Percent 100
@@ -470,8 +656,8 @@ monthlyTimeLineView campaignInfo =
                 , transform [ Translate (w - timePadding) timePadding ]
                 ]
                 [ Axis.right [ Axis.tickCount 10 ] yScale
-                , text_ [ x (-timePadding*2), y -10, fontFamily [ "sans-serif" ], fontSize (TypedSvg.Types.px 20), fill (Paint (Color.rgb 0 0 0)) ] [ text "Contact Count" ]
-                , g [ transform [ Translate ((2*timePadding)-w) 0 ], class [ "series" ] ]
+                , text_ [ x (-timePadding * 2), y -10, fontFamily [ "sans-serif" ], fontSize (TypedSvg.Types.px 20), fill (Paint (Color.rgb 0 0 0)) ] [ text "Contact Count" ]
+                , g [ transform [ Translate ((2 * timePadding) - w) 0 ], class [ "series" ] ]
                     [ Path.element contactLine [ stroke (Paint (Color.rgb 0 0 0)), strokeWidth (Px 1), fill PaintNone ]
                     ]
                 ]
