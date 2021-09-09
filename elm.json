@@ -15,7 +15,8 @@
             "ericgj/elm-csv-decode": "2.0.1",
             "folkertdev/one-true-path-experiment": "6.0.0",
             "gampleman/elm-visualization": "2.3.0",
-            "lovasoa/elm-csv": "1.1.7"
+            "lovasoa/elm-csv": "1.1.7",
+            "zwilias/elm-rosetree": "1.5.0"
         },
         "indirect": {
             "elm/bytes": "1.0.8",

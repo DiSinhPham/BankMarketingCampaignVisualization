@@ -12,6 +12,9 @@ import Http
 import Path exposing (Path)
 import Scale exposing (ContinuousScale)
 import Shape
+import String exposing (fromFloat)
+import Task exposing (fail)
+import Tree exposing (Tree)
 import TypedSvg exposing (circle, g, line, polygon, rect, style, svg, text_)
 import TypedSvg.Attributes exposing (class, color, d, fill, fontFamily, fontSize, points, stroke, strokeWidth, textAnchor, transform, viewBox)
 import TypedSvg.Attributes.InPx exposing (cx, cy, height, r, width, x, x1, x2, y, y1, y2)
@@ -74,38 +77,34 @@ update : Msg -> ( Model, LoadedCSV, List DemographicDataType ) -> ( ( Model, Loa
 update msg ( model, loadedFile, axisOrder ) =
     let
         newModel =
-            Debug.log "model"
-                (case msg of
-                    GotText result ->
-                        case result of
-                            Ok detailedResponse ->
-                                Success detailedResponse
+            case msg of
+                GotText result ->
+                    case result of
+                        Ok detailedResponse ->
+                            Success detailedResponse
 
-                            Err detailedError ->
-                                Failure detailedError
+                        Err detailedError ->
+                            Failure detailedError
 
-                    _ ->
-                        model
-                )
+                _ ->
+                    model
 
         newAxisOrder =
-            Debug.log "test"
-                (case msg of
-                    Swap_1_2 ->
-                        reorderAxis axisOrder 1 False
+            case msg of
+                Swap_1_2 ->
+                    reorderAxis axisOrder 1 False
 
-                    Swap_2_3 ->
-                        reorderAxis axisOrder 2 False
+                Swap_2_3 ->
+                    reorderAxis axisOrder 2 False
 
-                    Swap_3_4 ->
-                        reorderAxis axisOrder 3 False
+                Swap_3_4 ->
+                    reorderAxis axisOrder 3 False
 
-                    Swap_4_5 ->
-                        reorderAxis axisOrder 4 False
+                Swap_4_5 ->
+                    reorderAxis axisOrder 4 False
 
-                    _ ->
-                        axisOrder
-                )
+                _ ->
+                    axisOrder
 
         updatedFile =
             case newModel of
@@ -211,25 +210,456 @@ view ( model, loadedFile, axisOrder ) =
                  , Html.p [] []
                  ]
                     ++ demographicPersonalView personList axisOrder
+                    ++ demographicFinanceView personList
                 )
 
 
 
--- Demographic View
+-- Financial Tree View
 
 
-w : Float
-w =
+demographicFinanceView : List Person -> List (Html Msg)
+demographicFinanceView clientList =
+    let
+        --Split Success/Fail
+        ( s, f ) =
+            List.partition (\n -> outcomeToBool n.output) clientList
+
+        --Split Default
+        ( sD, sd ) =
+            List.partition (\n -> n.default) s
+
+        ( fD, fd ) =
+            List.partition (\n -> n.default) f
+
+        --Split Housing
+        ( sDH, sDh ) =
+            List.partition (\n -> n.housing) sD
+
+        ( sdH, sdh ) =
+            List.partition (\n -> n.housing) sd
+
+        ( fDH, fDh ) =
+            List.partition (\n -> n.housing) fD
+
+        ( fdH, fdh ) =
+            List.partition (\n -> n.housing) fd
+
+        --Split Loan
+        ( sDHL, sDHl ) =
+            List.partition (\n -> n.loan) sDH
+
+        ( sDhL, sDhl ) =
+            List.partition (\n -> n.loan) sDh
+
+        ( sdHL, sdHl ) =
+            List.partition (\n -> n.loan) sdH
+
+        ( sdhL, sdhl ) =
+            List.partition (\n -> n.loan) sdh
+
+        ( fDHL, fDHl ) =
+            List.partition (\n -> n.loan) fDH
+
+        ( fDhL, fDhl ) =
+            List.partition (\n -> n.loan) fDh
+
+        ( fdHL, fdHl ) =
+            List.partition (\n -> n.loan) fdH
+
+        ( fdhL, fdhl ) =
+            List.partition (\n -> n.loan) fdh
+
+        --Tree
+        clientTree =
+            Tree.tree ( "all", List.length clientList )
+                [ Tree.tree ( "s", List.length s )
+                    [ Tree.tree ( "sD", List.length sD )
+                        [ Tree.tree ( "sDH", List.length sDH )
+                            [ Tree.singleton ( "sDHL", List.length sDHL )
+                            , Tree.singleton ( "sDHl", List.length sDHl )
+                            ]
+                        , Tree.tree ( "sDh", List.length sDh )
+                            [ Tree.singleton ( "sDhL", List.length sDhL )
+                            , Tree.singleton ( "sDhl", List.length sDhl )
+                            ]
+                        ]
+                    , Tree.tree ( "sd", List.length sd )
+                        [ Tree.tree ( "sdH", List.length sdH )
+                            [ Tree.singleton ( "sdHL", List.length sdHL )
+                            , Tree.singleton ( "sdHl", List.length sdHl )
+                            ]
+                        , Tree.tree ( "sdh", List.length sdh )
+                            [ Tree.singleton ( "sdhL", List.length sdhL )
+                            , Tree.singleton ( "sdhl", List.length sdhl )
+                            ]
+                        ]
+                    ]
+                , Tree.tree ( "f", List.length f )
+                    [ Tree.tree ( "fD", List.length fD )
+                        [ Tree.tree ( "fDH", List.length fDH )
+                            [ Tree.singleton ( "fDHL", List.length fDHL )
+                            , Tree.singleton ( "fDHl", List.length fDHl )
+                            ]
+                        , Tree.tree ( "fDh", List.length fDh )
+                            [ Tree.singleton ( "fDhL", List.length fDhL )
+                            , Tree.singleton ( "fDhl", List.length fDhl )
+                            ]
+                        ]
+                    , Tree.tree ( "fd", List.length fd )
+                        [ Tree.tree ( "fdH", List.length fdH )
+                            [ Tree.singleton ( "fdHL", List.length fdHL )
+                            , Tree.singleton ( "fdHl", List.length fdHl )
+                            ]
+                        , Tree.tree ( "fdh", List.length fdh )
+                            [ Tree.singleton ( "fdhL", List.length fdhL )
+                            , Tree.singleton ( "fdhl", List.length fdhl )
+                            ]
+                        ]
+                    ]
+                ]
+
+        successTree =
+            Tree.tree ( "s", List.length s )
+                [ Tree.tree ( "sD", List.length sD )
+                    [ Tree.tree ( "sDH", List.length sDH )
+                        [ Tree.singleton ( "sDHL", List.length sDHL )
+                        , Tree.singleton ( "sDHl", List.length sDHl )
+                        ]
+                    , Tree.tree ( "sDh", List.length sDh )
+                        [ Tree.singleton ( "sDhL", List.length sDhL )
+                        , Tree.singleton ( "sDhl", List.length sDhl )
+                        ]
+                    ]
+                , Tree.tree ( "sd", List.length sd )
+                    [ Tree.tree ( "sdH", List.length sdH )
+                        [ Tree.singleton ( "sdHL", List.length sdHL )
+                        , Tree.singleton ( "sdHl", List.length sdHl )
+                        ]
+                    , Tree.tree ( "sdh", List.length sdh )
+                        [ Tree.singleton ( "sdhL", List.length sdhL )
+                        , Tree.singleton ( "sdhl", List.length sdhl )
+                        ]
+                    ]
+                ]
+
+        failTree =
+            Tree.tree ( "f", List.length f )
+                [ Tree.tree ( "fD", List.length fD )
+                    [ Tree.tree ( "fDH", List.length fDH )
+                        [ Tree.singleton ( "fDHL", List.length fDHL )
+                        , Tree.singleton ( "fDHl", List.length fDHl )
+                        ]
+                    , Tree.tree ( "fDh", List.length fDh )
+                        [ Tree.singleton ( "fDhL", List.length fDhL )
+                        , Tree.singleton ( "fDhl", List.length fDhl )
+                        ]
+                    ]
+                , Tree.tree ( "fd", List.length fd )
+                    [ Tree.tree ( "fdH", List.length fdH )
+                        [ Tree.singleton ( "fdHL", List.length fdHL )
+                        , Tree.singleton ( "fdHl", List.length fdHl )
+                        ]
+                    , Tree.tree ( "fdh", List.length fdh )
+                        [ Tree.singleton ( "fdhL", List.length fdhL )
+                        , Tree.singleton ( "fdhl", List.length fdhl )
+                        ]
+                    ]
+                ]
+    in
+    [ div []
+        [ Html.p [] [ Html.text "Distribution of Loan Situation" ]
+        , Html.p [] [ Html.text "Complete Tree" ]
+        , drawTreemapSimple clientTree True
+        , Html.p [] [ Html.text "Separated Trees" ]
+        , div []
+            [ drawTreemapSimple successTree False
+            , drawTreemapSimple failTree False
+            ]
+        ]
+    ]
+
+
+drawTreemapSimple : Tree ( String, Int ) -> Bool -> Html Msg
+drawTreemapSimple t splitX =
+    let
+        w =
+            1000
+
+        h =
+            1000
+
+        padding =
+            100
+    in
+    svg
+        [ viewBox 0 0 (w + 2 * padding) (h + 2 * padding)
+        , TypedSvg.Attributes.width <| TypedSvg.Types.Percent 50
+        , TypedSvg.Attributes.height <| TypedSvg.Types.Percent 50
+        , TypedSvg.Attributes.preserveAspectRatio (TypedSvg.Types.Align TypedSvg.Types.ScaleMin TypedSvg.Types.ScaleMin) TypedSvg.Types.Slice
+        ]
+        [ style [] [ TypedSvg.Core.text """
+                .rect1:hover rect {stroke: rgba(0, 0, 0,1.0); fill: rgba(255, 255, 255, 1);  }
+                .rect1 text { display: none; }
+                .rect1:hover text { display: inline; font: bold 30px sans-serif;}
+              """ ]
+        , TypedSvg.g [ TypedSvg.Attributes.transform [ Translate padding padding ] ] <| drawTreeNode splitX 0 0 w h t
+        ]
+
+
+drawTreeNode : Bool -> Float -> Float -> Float -> Float -> Tree ( String, Int ) -> List (Svg Msg)
+drawTreeNode splitX x y w h t =
+    let
+        -- Aufbereiten von Kind-Listen um diese iterativ abzuarbeiten
+        --Liste der Kinder
+        children =
+            Tree.children t
+
+        --Summe der Kindervalues. Theoretisch das Wert Labels des ausgewählten Elternknoten.
+        sumOfChildren =
+            toFloat (List.sum (List.map (\( n, v ) -> v) (List.map Tree.label children)))
+
+        --Anteile der Kindknoten für die aktuelle Split-Achse (für Skalierung)
+        childSpaceAllocation =
+            List.map (\( n, v ) -> toFloat v / sumOfChildren) (List.map Tree.label children)
+
+        --Breite der Kindknoten basierend auf deren Prozentualen Anteile
+        childW =
+            if splitX then
+                List.map (\n -> (w * 0.9) * n) childSpaceAllocation
+
+            else
+                List.repeat (List.length children) (w * 0.9)
+
+        --Höhe der Kindknoten basierend auf deren Prozentualen Anteile
+        childH =
+            if splitX then
+                List.repeat (List.length children) (h * 0.9)
+
+            else
+                List.map (\n -> (h * 0.9) * n) childSpaceAllocation
+
+        --X-Position der Kindknoten berechnet mithilfe der Breiten
+        childX =
+            if splitX then
+                List.indexedMap (\i n -> (x + (w * 0.025)) + List.sum (List.take i childW) + (toFloat i * (w * 0.025))) childW
+
+            else
+                List.repeat (List.length children) (x + (0.05 * w))
+
+        --Y-Position der Kindknoten berechnet mithilfe der Höhen
+        childY =
+            if splitX then
+                List.repeat (List.length children) (y + (0.05 * h))
+
+            else
+                List.indexedMap (\i n -> (y + (h * 0.025)) + List.sum (List.take i childH) + (toFloat i * (h * 0.025))) childH
+
+        --Kinder werden iterativ abgearbeitet. Für jedes Kind wird die Funktion rekursiv aufgerufen.
+        result =
+            if List.length children > 0 then
+                [ g
+                    [ class [ "rect1" ]
+                    , fontSize <| Px 30.0
+                    , fontFamily [ "sans-serif" ]
+                    ]
+                    [ TypedSvg.rect
+                        [ TypedSvg.Attributes.x <| TypedSvg.Types.px x
+                        , TypedSvg.Attributes.y <| TypedSvg.Types.px y
+                        , TypedSvg.Attributes.width <| TypedSvg.Types.px w
+                        , TypedSvg.Attributes.height <| TypedSvg.Types.px h
+                        , TypedSvg.Attributes.stroke <| TypedSvg.Types.Paint Color.black
+                        , TypedSvg.Attributes.fill <| TypedSvg.Types.Paint (getColorFromStringCode (Tuple.first (Tree.label t)))
+                        ]
+                        []
+                    , text_
+                        [ TypedSvg.Attributes.x <| TypedSvg.Types.px 0
+                        , TypedSvg.Attributes.y <| TypedSvg.Types.px -10
+                        , textAnchor TypedSvg.Types.AnchorStart
+                        ]
+                        [ text (getStringCodeToLabel (Tuple.first (Tree.label t))) ]
+                    ]
+                ]
+                    ++ List.concat (List.map5 (drawTreeNode (not splitX)) childX childY childW childH children)
+
+            else
+                [ g
+                    [ class [ "rect1" ]
+                    , fontSize <| Px 30.0
+                    , fontFamily [ "sans-serif" ]
+                    ]
+                    [ TypedSvg.rect
+                        [ TypedSvg.Attributes.x <| TypedSvg.Types.px x
+                        , TypedSvg.Attributes.y <| TypedSvg.Types.px y
+                        , TypedSvg.Attributes.width <| TypedSvg.Types.px w
+                        , TypedSvg.Attributes.height <| TypedSvg.Types.px h
+                        , TypedSvg.Attributes.stroke <| TypedSvg.Types.Paint Color.black
+                        , TypedSvg.Attributes.fill <| TypedSvg.Types.Paint (getColorFromStringCode (Tuple.first (Tree.label t)))
+                        ]
+                        []
+                    , text_
+                        [ TypedSvg.Attributes.x <| TypedSvg.Types.px 0
+                        , TypedSvg.Attributes.y <| TypedSvg.Types.px -10
+                        , textAnchor TypedSvg.Types.AnchorStart
+                        ]
+                        [ text (getStringCodeToLabel (Tuple.first (Tree.label t))) ]
+                    ]
+                ]
+    in
+    result
+
+
+getColorFromStringCode : String -> Color.Color
+getColorFromStringCode code =
+    case String.length code of
+        1 ->
+            if String.contains "s" code then
+                Color.rgba 0 0 1 1
+
+            else
+                Color.rgba 0 0 0.5 1
+
+        2 ->
+            if String.contains "D" code then
+                Color.rgba 1 0 0 1
+
+            else
+                Color.rgba 0.5 0 0 1
+
+        3 ->
+            if String.contains "H" code then
+                Color.rgba 0 1 1 1
+
+            else
+                Color.rgba 0 0.5 0.5 1
+
+        4 ->
+            if String.contains "L" code then
+                Color.rgba 1 1 0 1
+
+            else
+                Color.rgba 0.5 0.5 0 1
+
+        _ ->
+            Color.rgba 0.5 0.5 0.5 1
+
+
+getStringCodeToLabel : String -> String
+getStringCodeToLabel code =
+    case code of
+        "all" ->
+            "Full Data Set"
+
+        "s" ->
+            "Success"
+
+        "sD" ->
+            "Success - Default: Yes"
+
+        "sd" ->
+            "Success - Default: No"
+
+        "sDH" ->
+            "Success - Default: Yes - House Loan: Yes"
+
+        "sDh" ->
+            "Success - Default: Yes - House Loan: No"
+
+        "sdH" ->
+            "Success - Default: No - House Loan: Yes"
+
+        "sdh" ->
+            "Success - Default: No - House Loan: No"
+
+        "sDHL" ->
+            "Success - Default: Yes - House Loan: Yes - Other Loan: Yes"
+
+        "sDHl" ->
+            "Success - Default: Yes - House Loan: Yes - Other Loan: No"
+
+        "sDhL" ->
+            "Success - Default: Yes - House Loan: No - Other Loan: Yes"
+
+        "sDhl" ->
+            "Success - Default: Yes - House Loan: No - Other Loan: No"
+
+        "sdHL" ->
+            "Success - Default: No - House Loan: Yes - Other Loan: Yes"
+
+        "sdHl" ->
+            "Success - Default: No - House Loan: Yes - Other Loan: No"
+
+        "sdhL" ->
+            "Success - Default: No - House Loan: No - Other Loan: Yes"
+
+        "sdhl" ->
+            "Success - Default: No - House Loan: No - Other Loan: No"
+
+        "f" ->
+            "Faillure"
+
+        "fD" ->
+            "Faillure - Default: Yes"
+
+        "fd" ->
+            "Faillure - Default: No"
+
+        "fDH" ->
+            "Faillure - Default: Yes - House Loan: Yes"
+
+        "fDh" ->
+            "Faillure - Default: Yes - House Loan: No"
+
+        "fdH" ->
+            "Faillure - Default: No - House Loan: Yes"
+
+        "fdh" ->
+            "Faillure - Default: No - House Loan: No"
+
+        "fDHL" ->
+            "Faillure - Default: Yes - House Loan: Yes - Other Loan: Yes"
+
+        "fDHl" ->
+            "Faillure - Default: Yes - House Loan: Yes - Other Loan: No"
+
+        "fDhL" ->
+            "Faillure - Default: Yes - House Loan: No - Other Loan: Yes"
+
+        "fDhl" ->
+            "Faillure - Default: Yes - House Loan: No - Other Loan: No"
+
+        "fdHL" ->
+            "Faillure - Default: No - House Loan: Yes - Other Loan: Yes"
+
+        "fdHl" ->
+            "Faillure - Default: No - House Loan: Yes - Other Loan: No"
+
+        "fdhL" ->
+            "Faillure - Default: No - House Loan: No - Other Loan: Yes"
+
+        "fdhl" ->
+            "Faillure - Default: No - House Loan: No - Other Loan: No"
+
+        _ ->
+            "Error"
+
+
+
+-- Demographic Personal View
+
+
+demoW : Float
+demoW =
     900
 
 
-h : Float
-h =
+demoH : Float
+demoH =
     450
 
 
-padding : Float
-padding =
+demoPadding : Float
+demoPadding =
     60
 
 
@@ -253,7 +683,7 @@ demographicPersonalView clientList axisOrder =
 
         xScale : ContinuousScale Float
         xScale =
-            Scale.linear ( 0, w - 2 * padding ) (wideExtent xValues 5)
+            Scale.linear ( 0, demoW - 2 * demoPadding ) (wideExtent xValues 5)
 
         lineGenerator : ( Float, Float ) -> Maybe ( Float, Float )
         lineGenerator ( x, y ) =
@@ -273,20 +703,20 @@ demographicPersonalView clientList axisOrder =
     in
     [ div [] []
     , Html.p [] [ Html.text "Job: (0 - Unknown)  (1 - Unemployed)  (2 - Retired)  (3 - Student)  (4 - Self-Employed)  (5 - Housemaid)  (6 - Blue-Collar)  (7 - Technician)  (8 - Services)  (9 - Management)  (10 - Admin)  (11 - Entepreneur)" ]
-    , Html.p [] [ Html.text "Martial: (0 - Single)  (1 - Divorced)  (2 - Married)" ]
+    , Html.p [] [ Html.text "Marital: (0 - Single)  (1 - Divorced)  (2 - Married)" ]
     , Html.p [] [ Html.text "Education: (0 - Unknown)  (1 - Primary)  (2 - Secondary)  (3 - Tertiary)" ]
-    , svg [ viewBox 0 0 w h, TypedSvg.Attributes.width <| TypedSvg.Types.Percent 100, TypedSvg.Attributes.height <| TypedSvg.Types.Percent 100 ]
+    , svg [ viewBox 0 0 demoW demoH, TypedSvg.Attributes.width <| TypedSvg.Types.Percent 100, TypedSvg.Attributes.height <| TypedSvg.Types.Percent 100 ]
         ([ style [] [ TypedSvg.Core.text """
             .frame rect { stroke: rgba(0, 0, 0,1); fill: rgba(0, 0, 0,1.0);}
               """ ]
          , g
             [ class [ "frame" ]
             ]
-            [ rect [ x 0, y 0, width w, height h ] []
+            [ rect [ x 0, y 0, width demoW, height demoH ] []
             ]
          , g
             [ class [ "diagramlabel" ]
-            , transform [ Translate (2 * padding) (h - (padding / 4)) ]
+            , transform [ Translate (2 * demoPadding) (demoH - (demoPadding / 4)) ]
             , stroke (Paint Color.white)
             , strokeWidth (Px 0.5)
             , fill (Paint Color.white)
@@ -308,18 +738,18 @@ demographicPersonalView clientList axisOrder =
         , button [ onClick Swap_4_5 ] [ text "◄►" ]
         , Html.text (" #5: " ++ (Maybe.withDefault "" <| Maybe.andThen demoDataTypeToString <| List.head (List.drop 4 axisOrder)) ++ " ")
         ]
-    , svg [ viewBox 0 0 w h, TypedSvg.Attributes.width <| TypedSvg.Types.Percent 100, TypedSvg.Attributes.height <| TypedSvg.Types.Percent 100 ]
+    , svg [ viewBox 0 0 demoW demoH, TypedSvg.Attributes.width <| TypedSvg.Types.Percent 100, TypedSvg.Attributes.height <| TypedSvg.Types.Percent 100 ]
         ([ style [] [ TypedSvg.Core.text """
             .frame rect { stroke: rgba(0, 0, 0,1); fill: rgba(0, 0, 0,1.0);}
               """ ]
          , g
             [ class [ "frame" ]
             ]
-            [ rect [ x 0, y 0, width w, height h ] []
+            [ rect [ x 0, y 0, width demoW, height demoH ] []
             ]
          , g
             [ class [ "diagramlabel" ]
-            , transform [ Translate (2 * padding) (h - (padding / 4)) ]
+            , transform [ Translate (2 * demoPadding) (demoH - (demoPadding / 4)) ]
             , stroke (Paint Color.white)
             , strokeWidth (Px 0.5)
             , fill (Paint Color.white)
@@ -375,19 +805,19 @@ createMultiDimData clientList axisOrder =
             getFloatListFromDemoDataType (Maybe.withDefault DemoAge (List.head (List.drop 4 axisOrder))) clientList
 
         firstScale =
-            Scale.linear ( h - 2 * padding, 0 ) (wideExtent firstFloatList 11)
+            Scale.linear ( demoH - 2 * demoPadding, 0 ) (wideExtent firstFloatList 11)
 
         secondScale =
-            Scale.linear ( h - 2 * padding, 0 ) (wideExtent secondFloatList 4)
+            Scale.linear ( demoH - 2 * demoPadding, 0 ) (wideExtent secondFloatList 4)
 
         thirdScale =
-            Scale.linear ( h - 2 * padding, 0 ) (wideExtent thirdFloatList 9)
+            Scale.linear ( demoH - 2 * demoPadding, 0 ) (wideExtent thirdFloatList 9)
 
         fourthScale =
-            Scale.linear ( h - 2 * padding, 0 ) (wideExtent fourthFloatList 10)
+            Scale.linear ( demoH - 2 * demoPadding, 0 ) (wideExtent fourthFloatList 10)
 
         fifthScale =
-            Scale.linear ( h - 2 * padding, 0 ) (wideExtent fifthFloatList 3)
+            Scale.linear ( demoH - 2 * demoPadding, 0 ) (wideExtent fifthFloatList 3)
 
         scaleList =
             [ firstScale, secondScale, thirdScale, fourthScale, fifthScale ]
@@ -481,7 +911,7 @@ axisFromDemoDataType clientList xScale dataType axisNumber =
         DemoAge ->
             g
                 [ class [ "axis" ]
-                , transform [ Translate (Scale.convert xScale (toFloat axisNumber) + padding) padding ]
+                , transform [ Translate (Scale.convert xScale (toFloat axisNumber) + demoPadding) demoPadding ]
                 , stroke (Paint Color.white)
                 , strokeWidth (Px 0.5)
                 , fill (Paint Color.white)
@@ -492,7 +922,7 @@ axisFromDemoDataType clientList xScale dataType axisNumber =
         DemoJob ->
             g
                 [ class [ "axis" ]
-                , transform [ Translate (Scale.convert xScale (toFloat axisNumber) + padding) padding ]
+                , transform [ Translate (Scale.convert xScale (toFloat axisNumber) + demoPadding) demoPadding ]
                 , stroke (Paint Color.white)
                 , strokeWidth (Px 0.5)
                 , fill (Paint Color.white)
@@ -503,7 +933,7 @@ axisFromDemoDataType clientList xScale dataType axisNumber =
         DemoMarital ->
             g
                 [ class [ "axis" ]
-                , transform [ Translate (Scale.convert xScale (toFloat axisNumber) + padding) padding ]
+                , transform [ Translate (Scale.convert xScale (toFloat axisNumber) + demoPadding) demoPadding ]
                 , stroke (Paint Color.white)
                 , strokeWidth (Px 0.5)
                 , fill (Paint Color.white)
@@ -514,7 +944,7 @@ axisFromDemoDataType clientList xScale dataType axisNumber =
         DemoEducation ->
             g
                 [ class [ "axis" ]
-                , transform [ Translate (Scale.convert xScale (toFloat axisNumber) + padding) padding ]
+                , transform [ Translate (Scale.convert xScale (toFloat axisNumber) + demoPadding) demoPadding ]
                 , stroke (Paint Color.white)
                 , strokeWidth (Px 0.5)
                 , fill (Paint Color.white)
@@ -525,7 +955,7 @@ axisFromDemoDataType clientList xScale dataType axisNumber =
         DemoBalance ->
             g
                 [ class [ "axis" ]
-                , transform [ Translate (Scale.convert xScale (toFloat axisNumber) + padding) padding ]
+                , transform [ Translate (Scale.convert xScale (toFloat axisNumber) + demoPadding) demoPadding ]
                 , stroke (Paint Color.white)
                 , strokeWidth (Px 0.5)
                 , fill (Paint Color.white)
@@ -582,12 +1012,12 @@ drawLine : Bool -> Path -> Svg msg
 drawLine accepted line =
     case accepted of
         True ->
-            g [ transform [ Translate padding padding ], class [ "series" ] ]
+            g [ transform [ Translate demoPadding demoPadding ], class [ "series" ] ]
                 [ Path.element line [ stroke (Paint (Color.rgba 0 0 1 0.8)), strokeWidth (Px 0.1), fill PaintNone ]
                 ]
 
         False ->
-            g [ transform [ Translate padding padding ], class [ "series2" ] ]
+            g [ transform [ Translate demoPadding demoPadding ], class [ "series2" ] ]
                 [ Path.element line [ stroke (Paint (Color.rgba 1 0 0 0.8)), strokeWidth (Px 0.1), fill PaintNone ]
                 ]
 
@@ -974,3 +1404,16 @@ educationToInt education =
 
         Tertiary ->
             3
+
+
+outcomeToBool : Outcome -> Bool
+outcomeToBool outcome =
+    case outcome of
+        Accepted ->
+            True
+
+        Declined ->
+            False
+
+        _ ->
+            False
