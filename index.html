@@ -5375,7 +5375,7 @@ var $author$project$Main$DemoBalance = {$: 'DemoBalance'};
 var $author$project$Main$DemoEducation = {$: 'DemoEducation'};
 var $author$project$Main$DemoJob = {$: 'DemoJob'};
 var $author$project$Main$DemoMarital = {$: 'DemoMarital'};
-var $author$project$Main$Familiarity = {$: 'Familiarity'};
+var $author$project$Main$Demographic = {$: 'Demographic'};
 var $author$project$Main$GotText = function (a) {
 	return {$: 'GotText', a: a};
 };
@@ -6154,7 +6154,7 @@ var $author$project$Main$init = function (_v0) {
 			_Utils_Tuple2(
 				_List_fromArray(
 					[$author$project$Main$DemoJob, $author$project$Main$DemoEducation, $author$project$Main$DemoBalance, $author$project$Main$DemoAge, $author$project$Main$DemoMarital]),
-				$author$project$Main$Familiarity)),
+				$author$project$Main$Demographic)),
 		$elm$http$Http$get(
 			{
 				expect: $author$project$Main$expectStringDetailed($author$project$Main$GotText),
@@ -6171,10 +6171,10 @@ var $author$project$Main$subscriptions = function (_v0) {
 	var dataSet = _v1.b;
 	return $elm$core$Platform$Sub$none;
 };
-var $author$project$Main$Demographic = {$: 'Demographic'};
 var $author$project$Main$Failure = function (a) {
 	return {$: 'Failure', a: a};
 };
+var $author$project$Main$Familiarity = {$: 'Familiarity'};
 var $author$project$Main$Success = function (a) {
 	return {$: 'Success', a: a};
 };

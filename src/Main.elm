@@ -60,7 +60,7 @@ type alias LoadedCSV =
 
 init : () -> ( ( Model, LoadedCSV, ( List DemographicDataType, DataSet ) ), Cmd Msg )
 init _ =
-    ( ( Loading, LoadedCSV "default" "default", ( [ DemoJob, DemoEducation, DemoBalance, DemoAge, DemoMarital ], Familiarity ) )
+    ( ( Loading, LoadedCSV "default" "default", ( [ DemoJob, DemoEducation, DemoBalance, DemoAge, DemoMarital ], Demographic ) )
     , Http.get
         { url = "https://raw.githubusercontent.com/DiSinhPham/BankMarketingCampaignVisualization/main/data/bank-full.csv"
         , expect = expectStringDetailed GotText
